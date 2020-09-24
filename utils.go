@@ -6,8 +6,13 @@ import (
 	"io/ioutil"
 	"os"
 	"encoding/json"
-	"log"
 )
+
+func check(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
 
 // fileExists checks if a file exists and is not a directory before we
 // try using it to prevent further errors.
@@ -19,42 +24,108 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+// returns array of person structs, otherwise empty array
 func readGroup(group string) []Person {
 	var people []Person
 
-	// open file
-	f, err := os.OpenFile(group,
-		os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Println(err)
+	if !fileExists(group) {
+		return people
 	}
-	defer f.Close()
 
-	// read line by line
-	// if _, err := f.ReadString(string(personBytes) + "\n"); err != nil {
-	// 	fmt.Println(err)
-	// }
+	// open file
+	bytes_read, err := ioutil.ReadFile(group)
+	if (err != nil) {
+		fmt.Println("0 bytes read")
+		return people
+	}
+
+	// unmarshal data
+	err = json.Unmarshal(bytes_read, &people)
+	check(err)
+	fmt.Printf("%+v", people)	
 	
-	// var nextPerson *[]byte
-	// var counint
-	// for b, err := f.ReadAt(&nextPerson + , off int64)
-	// 
-	//json.Unmarshal()
-
 	return people
 }
 
-func deleteObj(group string) {
-	// people := readGroup(group)
-	// wait lol ok ill just let u do it
-	// var filtered_people [len(people)]Person
-	// filtered_people = make([]Person, len(people))
-	// i := 0
+
+// write person to group file
+func addPerson(person *Person, group string) string {
+
+	var people []Person
 	
+	// check if file exists
+	if fileExists(group) {
+		people = readGroup(group)
+	}
+	
+	people = append(people, *person)			// add person to Person array
+	personBytes, err := json.Marshal(people)	// convert to JSON
+	check(err)
+	
+	// write to group file
+	f, err := os.OpenFile(group, os.O_WRONLY|os.O_CREATE, 0755)
+	check(err)
+	defer f.Close()
+	if _, err := f.Write(personBytes); err != nil {
+		fmt.Println(err)
+	}
+
+	return "success writing person to group"
 }
 
+// deletes person from group, returns number of people left.
+func deletePerson(name string, group string, deleted *Person) {
+
+	var people []Person
+	var remaining []Person
+	// var deleted *Person
+
+	// check if file exists
+	if fileExists(group) {
+		people = readGroup(group)
+	} else {
+		fmt.Println("Group did not exist!")
+		return
+	}
+
+	// copy all people except person to be deleted to new array
+	for _, person := range people {
+		if (person.Name != name) {
+			remaining = append(remaining, person)
+		} else {
+			*deleted = person
+			// fmt.Println("\n person deleted: \n", *deleted)
+			continue
+		}
+	}
+
+	fmt.Println("\n remaining people \n", remaining)
+	// fmt.Println("\n person deleted: \n", *deleted)
+
+	if deleted == nil {
+		fmt.Println("person doesn't seem to exist in group")
+		return
+	} else if len(remaining) == 0 {
+		fmt.Println("Everyone has been deleted from this group. Will remove group.")
+		deleteGroup(group)
+		return
+	}
+
+	personBytes, err := json.Marshal(remaining)
+	check(err)
+
+	// overwrite group file
+	f, err := os.OpenFile(group, os.O_TRUNC|os.O_WRONLY, 0755)
+	check(err)
+	defer f.Close()
+	
+	if _, err := f.Write(personBytes); err != nil {
+		fmt.Println(err)
+	}
+}
+
+// delete file corresponding to group
 func deleteGroup(group string) bool {
-	// delete file
 	
 	if !fileExists(group) {
 		return false // file never existed to begin with
@@ -68,40 +139,4 @@ func deleteGroup(group string) bool {
 
 	fmt.Println("File Deleted")
 	return true // file existed, and was deleted
-}
-
-func addPersonToGroup(person *Person, group string) string {
-
-	// var people_already_in_group = "[]"
-	if fileExists(group) {
-        fmt.Println("group file exists")
-    } else {
-		fmt.Println("file with name %s does not exist  (or is a directory). Will be writing.", group)
-		err := ioutil.WriteFile(group, []byte(""), 0755)
-		if err != nil {
-			fmt.Printf("Unable to write file: %v", err)
-		}
-	}
-	
-	personBytes, err := json.Marshal(person)
-	// os.Stdout.Write(personBytes)
-	fmt.Println("personBytes as string: ", string(personBytes))
-	if err != nil {
-		log.Println(err)
-		panic(err)
-	}
-
-	// append to group file
-	f, err := os.OpenFile(group,
-	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer f.Close()
-	if _, err := f.WriteString(string(personBytes) + "\n"); err != nil {
-		fmt.Println(err)
-	}	
-	
-
-	return "success writing person to group"
 }
